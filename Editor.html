@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <style>
+    body { margin:0; padding:16px; font-family:Arial, sans-serif; }
+    label { display:block; margin-top:10px; font-weight:600; }
+    input[type=text]{
+      width:100%; box-sizing:border-box; padding:6px 8px;
+      border:1px solid #ccc; border-radius:4px;
+    }
+    .doc-btn{
+      width:100%; margin-top:12px; padding:10px;
+      border:none; border-radius:4px; background:#34a853; color:#fff;
+      cursor:pointer; font-size:14px;
+    }
+    .doc-btn:hover{ filter:brightness(1.05); }
+  </style>
+</head>
+
+<body>
+  <div id="form"></div>
+  <hr>
+  <div id="charge" style="display: none"></div>
+  <div id="docs"></div>
+
+  <script>
+    /* -------- dados vindos do Apps Script -------- */
+    const colHeaders = <?!= JSON.stringify(headers) ?>;
+    const rowData    = <?!= JSON.stringify(rowData) ?>;
+    const rowIndex   = <?!= row ?>;                      // linha 1-based
+
+    /* -------- lista de botões / endpoints -------- */
+    const docArray = [
+      [
+        "1 - FICAP", 
+        "https://script.google.com/macros/s/AKfycbzmRIij1yj7SCUQGmBhOmOT52d5fuBT3BdI3aGnxeWrs9SQdvorc0yeNCsBYac4m9bz/exec",
+      ],
+      [
+        "2 - CHECK LIST", 
+        "https://script.google.com/macros/s/AKfycbxIOYofcXfLWXJ0uZe7dOtJn1XUXEwGu6EETPvjreWBmxzUjCdBJbtKKzDzace6_snz4w/exec",
+      ],
+      [
+        "3 - DEC. VÍNCULOS", 
+        "https://script.google.com/macros/s/AKfycbzLUS2587Iv7K0UsfS93-qv1jYURudVaBuOIjRJvncaAFVNlP2XewpTopc9J4CgfiBGCw/exec", 
+      ],
+      [
+        "4 - APRESENTAÇÃO", 
+        "https://script.google.com/macros/s/AKfycbybGsgakm3ZvmtTnLhyRI0RD056OK6vM6GMcX1H3-PTS8wISYItRzhkK3143L189b1U/exec", 
+      ],
+      [
+        "7 - MINUTA INCISO VI (ATIVIDADES SAZONAIS)", 
+        "https://script.google.com/macros/s/AKfycbzWhaC7izENLHP0DZDWjkBGAFLH1O5qQLOtA1YA0lPuBHiJEN5UCwdxBDTYo1hEdb9o/exec",
+      ],
+      [
+        "10 - O.S. (TEMPORÁRIA)", 
+        "https://script.google.com/macros/s/AKfycbyoXMKgThDt9hvAINuwwoDrFCqNBQb7amo9JBEsuvoj5zxYtVRQ9A6aPWHQSpxogzXK/exec",
+      ]
+    ]
+      
+
+    /* -------- debounce p/ atualização da planilha -------- */
+    const DEBOUNCE_MS = 400;
+
+    function buildUI() {
+      buildForm();
+      buildDocButtons();
+    }
+
+    /* ------ constrói inputs ---------- */
+    function buildForm() {
+      const form = document.getElementById('form');
+      colHeaders.forEach((h, i) => {
+        const lab = document.createElement('label');
+        lab.textContent = h || `Coluna ${i+1}`;
+
+        const inp = document.createElement('input');
+        inp.type  = 'text';
+        inp.value = rowData[i] ?? '';
+        inp.dataset.col = i + 1;
+
+        inp.addEventListener('input', () => {
+          clearTimeout(inp._debounce);
+          const col = Number(inp.dataset.col);
+          inp._debounce = setTimeout(() => {
+            google.script.run
+              .withFailureHandler(console.error)
+              .updateCell(rowIndex, col, inp.value);
+          }, DEBOUNCE_MS);
+        });
+
+        form.appendChild(lab);
+        form.appendChild(inp);
+      });
+    }
+
+    /* ------ constrói botões ---------- */
+    function buildDocButtons() {
+      const box = document.getElementById('docs');
+      docArray.forEach((item, idx) => {
+        const btn = document.createElement('button');
+        btn.className = 'doc-btn';
+        btn.textContent = item[0];
+        btn.addEventListener('click', () => handleDoc(idx));
+        btn.id = 'btn_doc_'+idx
+        box.appendChild(btn);
+      });
+    }
+
+    /* ------ fluxo GET ---------- */
+    async function handleDoc(idx) {
+      const [label, getURL, pdfURL] = docArray[idx];
+
+      docArray.forEach((item, idx_doc) => {
+        if(idx !== idx_doc){
+          document.getElementById('btn_doc_'+idx_doc).style.display = 'none'
+        }else{
+          document.getElementById('btn_doc_'+idx_doc).textContent = 'Gerando documento...'
+        }
+      })
+      
+      /* JSON com dados atuais da tela */
+      const payload = {};
+      colHeaders.forEach((h, i) => {
+        const inp = document.querySelector(`input[data-col='${i+1}']`);
+        const valor = inp ? inp.value.trim() : ''; // Pega o valor e remove espaços em branco
+        // Se o valor for vazio, usa o nome do campo (h). Senão, usa o próprio valor.
+        payload[h] = valor === '' ? '' : valor;
+      });
+
+      /* monta ?dados=<json> */
+      const queryJSON = encodeURIComponent(JSON.stringify(payload));
+      const connector = getURL.includes('?') ? '&' : '?';
+      const url = `${getURL}${connector}dados=${queryJSON}`;
+      
+      try {
+        const res  = await fetch(url);                   // GET
+        const txt  = await res.text();                   // pode ser JSON ou texto
+        let   data;
+        try { data = JSON.parse(txt); }                  // tenta JSON
+        catch { data = { status:'erro', raw:txt }; }
+
+        if (String(data.status).toLowerCase() === 'ok') {
+          window.open(data.doc_pdf, '_blank');
+        } else {
+          alert(`Erro retornado em “${label}”:\n` + txt);
+        }
+      } catch(err){
+        alert(`Falha na chamada GET de “${label}”:\n` + err);
+      }
+
+      docArray.forEach((item, idx_doc) => {
+        if(idx !== idx_doc){
+          document.getElementById('btn_doc_'+idx_doc).style.display = 'inline-block'
+        }else{
+          document.getElementById('btn_doc_'+idx_doc).textContent = item[0];
+        }
+      })
+    }
+
+    document.addEventListener('DOMContentLoaded', buildUI);
+  </script>
+</body>
+</html>
