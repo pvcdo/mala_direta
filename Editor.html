@@ -110,6 +110,8 @@
 
     /* ------ fluxo GET ---------- */
     async function handleDoc(idx) {
+
+      console.log('iniciando handle')
       const [label, getURL, pdfURL] = docArray[idx];
 
       docArray.forEach((item, idx_doc) => {
@@ -122,12 +124,34 @@
       
       /* JSON com dados atuais da tela */
       const payload = {};
+
+      /*const CURRENCY_HEADERS = [
+        'VENCIMENTO BÁSICO', 'VB2', 'ABONO FIXAÇÃO', 'ABF2', 
+        'ABONO URGÊNCIA DIAS SEMANA', 'AUDS2', 'ABONO URGENCIA DIAS SEMANA FDS', 'AUSF2', 
+        'ABONO URGÊNCIA FINAL DE SEMANA', 'AUFS2', 'ABONO REDE COMPLEMENTAR', 'ARC2', 
+        'PSF', 'PSF2', 'PISO DA ENFERMAGEM', 'PDE2', 
+        'REMUNERAÇÃO VALOR BRUTO', 'RVB2', 'SALÁRIO FAMÍLIA', 'TOTAL A RECEBER'
+      ].map(h => h.trim().toUpperCase()); // Converte para maiúsculas e remove espaços para comparação*/
+
       colHeaders.forEach((h, i) => {
         const inp = document.querySelector(`input[data-col='${i+1}']`);
-        const valor = inp ? inp.value.trim() : ''; // Pega o valor e remove espaços em branco
-        // Se o valor for vazio, usa o nome do campo (h). Senão, usa o próprio valor.
+        let valor = inp ? inp.value.trim() : ''; // Pega o valor e remove espaços em branco
+        
+        // LÓGICA DE LIMPEZA ANTES DE ENVIAR:
+        const header = h.trim().toUpperCase();
+        /*if (CURRENCY_HEADERS.includes(header) && valor.startsWith('R$')) {
+            // Remove "R$", remove separador de milhares (.), e troca vírgula (,) por ponto (.) decimal
+            valor = valor.replace('R$', '').trim().replace(/\./g, '').replace(',', '.');
+        }*/
+        // Para datas (dd/mm/yyyy), geralmente não precisa de limpeza, mas o servidor deve saber interpretá-la.
+        // Fim da LÓGICA DE LIMPEZA
+
+        // Se o valor for vazio... (o resto da sua lógica original)
+
         payload[h] = valor === '' ? '' : valor;
       });
+
+      console.log(payload)
 
       /* monta ?dados=<json> */
       const queryJSON = encodeURIComponent(JSON.stringify(payload));
